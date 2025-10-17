@@ -1,7 +1,6 @@
-from django.shortcuts import render
 from decimal import Decimal
 from django.db import transaction
-from rest_framework import viewsets, decorators, response, status
+from rest_framework import viewsets, mixins, decorators, response, status
 from rest_framework.permissions import IsAuthenticated
 from .models import CollaborationRequest, Commitment, RequestStatus, CommitmentStatus
 from .serializers import CollaborationRequestSerializer, CommitmentSerializer
@@ -22,19 +21,17 @@ def recompute_request_status(req: CollaborationRequest) -> None:
         if req.reserved_qty == 0 and req.fulfilled_qty == 0:
             req.status = RequestStatus.OPEN
         else:
-            # si hay cumplidos pero sin target, consideramos COMPLETED cuando no hay más por cumplir
-            # criterio simple: si no hay reservas pendientes → COMPLETED; si hay reservas → RESERVED
             req.status = RequestStatus.RESERVED if req.reserved_qty > 0 else RequestStatus.COMPLETED
 
 @extend_schema(
-    request=CollaborationRequestSerializer,
-    responses=CollaborationRequestSerializer,
+    tags=["Requests"],
+    description="Permite registrar nuevos pedidos de colaboración o consultar los existentes. ",
     examples=[
         OpenApiExample(
-            "Crear pedido (Materiales sin unit)",
+            "Crear pedido (Materiales)",
             value={
-                "project_ref": "11111111-1111-1111-1111-111111111111",
-                "need_ref": "22222222-2222-2222-2222-222222222222",
+                "project_ref": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                "need_ref": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
                 "title": "Cemento",
                 "description": "10 bolsas para la obra",
                 "request_type": "MAT",
@@ -43,10 +40,10 @@ def recompute_request_status(req: CollaborationRequest) -> None:
             request_only=True,
         ),
         OpenApiExample(
-            "Crear pedido (Económica con target)",
+            "Crear pedido (Económica)",
             value={
                 "project_ref": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-                "need_ref": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                "need_ref": "cccccccc-cccc-cccc-cccc-cccccccccccc",
                 "title": "Recaudación para materiales",
                 "description": "Fondos para compra de cemento y arena",
                 "request_type": "ECON",
@@ -56,12 +53,19 @@ def recompute_request_status(req: CollaborationRequest) -> None:
         ),
     ],
 )
-class RequestViewSet(viewsets.ModelViewSet):
+class RequestViewSet(
+    mixins.ListModelMixin,     # GET /api/requests/
+    mixins.CreateModelMixin,   # POST /api/requests/
+    viewsets.GenericViewSet
+):
+    """📘 Endpoints para pedidos de colaboración"""
     queryset = CollaborationRequest.objects.all().order_by("-created_at")
     serializer_class = CollaborationRequestSerializer
     permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post"]
 
     def get_queryset(self):
+        """Permite filtrar por project_ref o need_ref"""
         qs = super().get_queryset()
         project_ref = self.request.query_params.get("project_ref")
         need_ref = self.request.query_params.get("need_ref")
@@ -73,18 +77,19 @@ class RequestViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def perform_create(self, serializer):
+        """Guarda el pedido y actualiza automáticamente su estado"""
         obj = serializer.save()
         recompute_request_status(obj)
         obj.save(update_fields=["status"])
 
 @extend_schema(
-    request=CommitmentSerializer,
-    responses=CommitmentSerializer,
+    tags=["Commitments"],
+    description="Permite registrar compromisos de colaboración sobre pedidos existentes. ",
     examples=[
         OpenApiExample(
             "Crear compromiso parcial",
             value={
-                "request": "REEMPLAZAR_POR_UUID_DEL_REQUEST",
+                "request": "11111111-1111-1111-1111-111111111111",
                 "actor_label": "ONG Vecinos",
                 "amount": "5",
                 "description": "Aporto 5 bolsas"
@@ -93,18 +98,20 @@ class RequestViewSet(viewsets.ModelViewSet):
         ),
     ],
 )
-class CommitmentViewSet(viewsets.ModelViewSet):
+class CommitmentViewSet(
+    mixins.CreateModelMixin,      # POST /api/commitments/
+    mixins.RetrieveModelMixin,    # GET /api/commitments/{id}/
+    viewsets.GenericViewSet
+):
+    """🤝 Endpoints para compromisos (alta, ejecución y consulta de estado)"""
     queryset = Commitment.objects.select_related("request").all().order_by("-commitment_date")
     serializer_class = CommitmentSerializer
     permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post"]
 
     @transaction.atomic
     def perform_create(self, serializer):
-        """
-        Crear compromiso en estado ACTIVE:
-          - Suma amount a reserved_qty del request (si amount no es None)
-          - Recalcula estado del request
-        """
+        """Crea un compromiso en estado ACTIVE y actualiza los totales del pedido"""
         commit = serializer.save(status=CommitmentStatus.ACTIVE)
         req = CollaborationRequest.objects.select_for_update().get(pk=commit.request_id)
 
@@ -115,22 +122,22 @@ class CommitmentViewSet(viewsets.ModelViewSet):
         req.save(update_fields=["reserved_qty", "status"])
 
     @extend_schema(
-        request=None,
-        responses={200: OpenApiExample(
-            "Ejecución OK",
-            value={"ok": True},
-            response_only=True
-        )}
+        tags=["Commitments"],
+        operation_id="execute_commitment",
+        summary="Marcar un compromiso como completado",
+        description="Completa un compromiso, moviendo su monto de reservado a cumplido y recalculando el estado del pedido asociado.",
+        responses={
+            200: OpenApiExample(
+                "Ejecución OK",
+                value={"ok": True},
+                response_only=True
+            )
+        }
     )
     @decorators.action(detail=True, methods=["post"])
     @transaction.atomic
     def execute(self, request, pk=None):
-        """
-        Ejecuta (cumple) un compromiso:
-          - Cambia status a FULFILLED
-          - Mueve 'amount' de reserved_qty → fulfilled_qty
-          - Recalcula estado del request
-        """
+        """Ejecuta (cumple) un compromiso"""
         commit = self.get_object()
         if commit.status == CommitmentStatus.FULFILLED:
             return response.Response({"detail": "Ya estaba completado."}, status=status.HTTP_200_OK)
