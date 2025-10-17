@@ -7,7 +7,10 @@ python manage.py collectstatic --noinput || true
 # ---- Superusuario opcional (solo si variables provistas) ----
 if [[ -n "${DJANGO_SUPERUSER_USERNAME:-}" && -n "${DJANGO_SUPERUSER_EMAIL:-}" && -n "${DJANGO_SUPERUSER_PASSWORD:-}" ]]; then
 python <<'PYCODE'
-import os
+import os, django
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+django.setup()
+
 from django.contrib.auth import get_user_model
 User = get_user_model()
 u = os.environ["DJANGO_SUPERUSER_USERNAME"]
