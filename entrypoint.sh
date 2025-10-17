@@ -5,7 +5,6 @@ python manage.py migrate --noinput
 python manage.py collectstatic --noinput || true
 
 # ---- Superusuario opcional (solo si variables provistas) ----
-# Usa DJANGO_SUPERUSER_USERNAME, DJANGO_SUPERUSER_EMAIL, DJANGO_SUPERUSER_PASSWORD
 if [[ -n "${DJANGO_SUPERUSER_USERNAME:-}" && -n "${DJANGO_SUPERUSER_EMAIL:-}" && -n "${DJANGO_SUPERUSER_PASSWORD:-}" ]]; then
 python <<'PYCODE'
 import os
@@ -23,7 +22,6 @@ PYCODE
 fi
 
 # ---- Seed de DEMOS (solo si SEED_DEMO=1 y no se hizo antes) ----
-# DEMO_FIXTURES_DIR por defecto apunta a cloudapi/fixtures
 SEED_FLAG="${SEED_DEMO:-0}"
 FIX_DIR="${DEMO_FIXTURES_DIR:-cloudapi/fixtures}"
 SENTINEL="${SEED_SENTINEL_PATH:-/app/.seeded_demo}"
