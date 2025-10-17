@@ -31,6 +31,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'drf_spectacular',
     'cloudapi',
 ]
 
@@ -71,6 +73,15 @@ DATABASES = {
         ssl_require=not DEBUG,
     )
 }
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {"TITLE": "DSSD Cloud API", "VERSION": "1.0.0"}
 
 AUTH_PASSWORD_VALIDATORS = [
     {
