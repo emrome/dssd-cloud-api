@@ -11,7 +11,9 @@
       "target_qty": "10.00",
       "reserved_qty": "0.00",
       "fulfilled_qty": "0.00",
-      "status": "OPEN"
+      "status": "OPEN",
+      "created_at": "2025-01-15T10:00:00Z",
+      "updated_at": "2025-01-15T10:00:00Z"
     }
   },
   {
@@ -26,7 +28,9 @@
       "target_qty": "150000.00",
       "reserved_qty": "0.00",
       "fulfilled_qty": "0.00",
-      "status": "OPEN"
+      "status": "OPEN",
+      "created_at": "2025-01-15T11:00:00Z",
+      "updated_at": "2025-01-15T11:00:00Z"
     }
   },
   {
@@ -37,7 +41,9 @@
       "actor_label": "ONG Vecinos",
       "description": "Aporto 5 bolsas",
       "amount": "5.00",
-      "status": "ACTIVE"
+      "status": "ACTIVE",
+      "commitment_date": "2025-01-15T12:00:00Z",
+      "updated_at": "2025-01-15T12:00:00Z"
     }
   }
 ]

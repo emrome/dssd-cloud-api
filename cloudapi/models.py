@@ -78,7 +78,6 @@ class Commitment(models.Model):
         CollaborationRequest, on_delete=models.CASCADE, related_name="commitments"
     )
 
-    # actor opcional como texto libre (nombre, ONG, etc.)
     actor_label = models.CharField(max_length=140, blank=True, null=True, db_index=True)
 
     description = models.TextField(blank=True)
