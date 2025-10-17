@@ -81,7 +81,18 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
-SPECTACULAR_SETTINGS = {"TITLE": "DSSD Cloud API", "VERSION": "1.0.0"}
+SPECTACULAR_SETTINGS = {
+    "TITLE": "DSSD Cloud API",
+    "VERSION": "1.0.0",
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SECURITY": [{"BearerAuth": []}],
+    "COMPONENTS": {
+        "securitySchemes": {
+            "BearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+        }
+    },
+}
 
 AUTH_PASSWORD_VALIDATORS = [
     {

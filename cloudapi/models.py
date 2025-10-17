@@ -26,20 +26,17 @@ class CommitmentStatus(models.TextChoices):
 class CollaborationRequest(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    # referencias a la Web (sin FK reales)
     project_ref = models.UUIDField(db_index=True)
-    need_ref = models.UUIDField(db_index=True)  # obligatorio desde ahora
+    need_ref = models.UUIDField(db_index=True)
 
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     request_type = models.CharField(max_length=10, choices=RequestType.choices)
 
-    # cuantificación
     target_qty = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True,
         validators=[MinValueValidator(0)]
     )
-    unit = models.CharField(max_length=32, blank=True)
     reserved_qty = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     fulfilled_qty = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
@@ -51,6 +48,7 @@ class CollaborationRequest(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        db_table = 'collaboration_request'
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["project_ref"]),
@@ -96,6 +94,7 @@ class Commitment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        db_table = "commitment"
         ordering = ["-commitment_date"]
         indexes = [
             models.Index(fields=["request", "status"]),
