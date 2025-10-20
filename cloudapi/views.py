@@ -84,7 +84,7 @@ class RequestViewSet(
 
 @extend_schema(
     tags=["Commitments"],
-    description="Permite registrar compromisos de colaboración sobre pedidos existentes. ",
+    description="Permite registrar compromisos de colaboración sobre pedidos existentes o ver la información de compromisos ya realizados.",
     examples=[
         OpenApiExample(
             "Crear compromiso parcial",
