@@ -126,6 +126,7 @@ class CommitmentViewSet(
         operation_id="execute_commitment",
         summary="Marcar un compromiso como completado",
         description="Completa un compromiso, moviendo su monto de reservado a cumplido y recalculando el estado del pedido asociado.",
+        request=None,
         responses={
             200: OpenApiExample(
                 "Ejecución OK",
@@ -156,3 +157,4 @@ class CommitmentViewSet(
         req.save(update_fields=["reserved_qty", "fulfilled_qty", "status"])
 
         return response.Response({"ok": True}, status=status.HTTP_200_OK)
+    
