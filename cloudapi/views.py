@@ -23,6 +23,7 @@ def recompute_request_status(req: CollaborationRequest) -> None:
         else:
             req.status = RequestStatus.RESERVED if req.reserved_qty > 0 else RequestStatus.COMPLETED
 
+
 @extend_schema(
     tags=["Requests"],
     description="Permite registrar nuevos pedidos de colaboración o consultar los existentes. ",
@@ -81,6 +82,35 @@ class RequestViewSet(
         obj = serializer.save()
         recompute_request_status(obj)
         obj.save(update_fields=["status"])
+
+    @extend_schema(
+        tags=["Requests"],
+        operation_id="list_requests_by_project",
+        description="Recupera todos los pedidos de colaboración asociados a un proyecto determinado, usando su UUID como parte de la URL.",
+        request=None, 
+        responses={200: CollaborationRequestSerializer(many=True)} 
+    )
+    @decorators.action(
+        detail=False, 
+        methods=["get"], 
+        url_path='by-project/(?P<project_ref>[0-9a-f-]{36})'
+    )
+    def by_project(self, request, project_ref=None):
+        """
+        Recupera pedidos en base a un project_ref.
+        """
+        qs = self.get_queryset().filter(project_ref=project_ref)
+
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        # Si no hay paginación, devuelve la lista completa
+        serializer = self.get_serializer(qs, many=True)
+        return response.Response(serializer.data, status=status.HTTP_200_OK)
+
+
 
 @extend_schema(
     tags=["Commitments"],
@@ -157,4 +187,3 @@ class CommitmentViewSet(
         req.save(update_fields=["reserved_qty", "fulfilled_qty", "status"])
 
         return response.Response({"ok": True}, status=status.HTTP_200_OK)
-    
