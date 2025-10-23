@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "[init] Aplicando migraciones..."
 python manage.py migrate --noinput
+
+echo "[init] Collectstatic..."
 python manage.py collectstatic --noinput || true
 
 # ---- Superusuario opcional (solo si variables provistas) ----
@@ -24,24 +27,18 @@ else:
 PYCODE
 fi
 
-# ---- Seed de DEMOS (solo si SEED_DEMO=1 y no se hizo antes) ----
-SEED_FLAG="${SEED_DEMO:-0}"
-FIX_DIR="${DEMO_FIXTURES_DIR:-cloudapi/fixtures}"
-SENTINEL="${SEED_SENTINEL_PATH:-/app/.seeded_demo}"
-
-if [[ "$SEED_FLAG" = "1" ]]; then
-  if [[ -f "$SENTINEL" ]]; then
-    echo "[seed] Ya aplicado previamente (marcado por $SENTINEL)"
-  else
-    echo "[seed] Cargando fixtures desde $FIX_DIR ..."
-    shopt -s nullglob
-    for f in "$FIX_DIR"/*.json; do
-      echo "[seed] loaddata $(basename "$f")"
-      python manage.py loaddata "$f"
-    done
-    touch "$SENTINEL"
-    echo "[seed] Listo. Marcado con $SENTINEL"
-  fi
+# --- Reset opcional (borra toda la base) ---
+if [[ "${SEED_RESET:-0}" = "1" ]]; then
+  echo "[seed] RESET activo: limpiando base de datos..."
+  python manage.py flush --no-input
+  python manage.py migrate --noinput
 fi
 
+# --- Carga de datos demo ---
+if [[ "${SEED_DEMO:-0}" = "1" ]]; then
+  echo "[seed] Cargando fixtures demo.json..."
+  python manage.py loaddata cloudapi/fixtures/demo.json
+fi
+
+echo "[start] Iniciando servidor..."
 exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 3

@@ -45,5 +45,39 @@
       "commitment_date": "2025-01-15T12:00:00Z",
       "updated_at": "2025-01-15T12:00:00Z"
     }
+  },
+  {
+    "model": "cloudapi.collaborationrequest",
+    "pk": "44444444-4444-4444-4444-444444444444",
+    "fields": {
+      "project_ref": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+      "need_ref": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+      "title": "Herramientas",
+      "description": "Buscamos 3 martillos y 2 escaleras",
+      "request_type": "MAT",
+      "target_qty": "5.00",
+      "reserved_qty": "0.00",
+      "fulfilled_qty": "0.00",
+      "status": "OPEN",
+      "created_at": "2025-02-01T09:00:00Z",
+      "updated_at": "2025-02-01T09:00:00Z"
+    }
+  },
+  {
+    "model": "cloudapi.collaborationrequest",
+    "pk": "55555555-5555-5555-5555-555555555555",
+    "fields": {
+      "project_ref": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+      "need_ref": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+      "title": "Voluntarios para charlas",
+      "description": "Buscamos 2 profesionales para brindar talleres educativos",
+      "request_type": "MO",
+      "target_qty": "2.00",
+      "reserved_qty": "0.00",
+      "fulfilled_qty": "0.00",
+      "status": "OPEN",
+      "created_at": "2025-02-01T09:30:00Z",
+      "updated_at": "2025-02-01T09:30:00Z"
+    }
   }
 ]
