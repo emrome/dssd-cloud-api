@@ -1,27 +1,21 @@
-from decimal import Decimal
 from django.db import transaction
+from django.http import Http404 
 from rest_framework import viewsets, mixins, decorators, response, status
 from rest_framework.permissions import IsAuthenticated
-from .models import CollaborationRequest, Commitment, RequestStatus, CommitmentStatus
-from .serializers import CollaborationRequestSerializer, CommitmentSerializer
-from drf_spectacular.utils import extend_schema, OpenApiExample
+from rest_framework.exceptions import ValidationError
 
-def recompute_request_status(req: CollaborationRequest) -> None:
-    """
-    Regla:
-      - COMPLETED si fulfilled_qty >= target_qty (cuando existe target)
-      - RESERVED si reserved_qty > 0 o (fulfilled < target)
-      - OPEN si no hay reservas ni cumplidos
-    """
-    if req.target_qty is not None and req.fulfilled_qty >= req.target_qty:
-        req.status = RequestStatus.COMPLETED
-    elif (req.reserved_qty > 0) or (req.target_qty is not None and req.fulfilled_qty < req.target_qty):
-        req.status = RequestStatus.RESERVED
-    else:
-        if req.reserved_qty == 0 and req.fulfilled_qty == 0:
-            req.status = RequestStatus.OPEN
-        else:
-            req.status = RequestStatus.RESERVED if req.reserved_qty > 0 else RequestStatus.COMPLETED
+from .models import CollaborationRequest, Commitment, CommitmentStatus
+from .serializers import CollaborationRequestSerializer, CommitmentSerializer
+
+from .services import (
+    recompute_request_status, 
+    update_request_on_new_commitment, 
+    execute_commitment_service
+)
+from .exceptions import BusinessLogicError, RelatedRequestNotFoundError
+
+# Swagger
+from drf_spectacular.utils import extend_schema, OpenApiExample
 
 
 @extend_schema(
@@ -55,8 +49,8 @@ def recompute_request_status(req: CollaborationRequest) -> None:
     ],
 )
 class RequestViewSet(
-    mixins.ListModelMixin,     # GET /api/requests/
-    mixins.CreateModelMixin,   # POST /api/requests/
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
     viewsets.GenericViewSet
 ):
     """📘 Endpoints para pedidos de colaboración"""
@@ -78,9 +72,12 @@ class RequestViewSet(
 
     @transaction.atomic
     def perform_create(self, serializer):
-        """Guarda el pedido y actualiza automáticamente su estado"""
+        """
+        Guarda el pedido y llama al servicio para actualizar 
+        automáticamente su estado.
+        """
         obj = serializer.save()
-        recompute_request_status(obj)
+        recompute_request_status(obj) 
         obj.save(update_fields=["status"])
 
     @extend_schema(
@@ -96,9 +93,7 @@ class RequestViewSet(
         url_path='by-project/(?P<project_ref>[0-9a-f-]{36})'
     )
     def by_project(self, request, project_ref=None):
-        """
-        Recupera pedidos en base a un project_ref.
-        """
+        """Recupera pedidos en base a un project_ref."""
         qs = self.get_queryset().filter(project_ref=project_ref)
 
         page = self.paginate_queryset(qs)
@@ -106,10 +101,8 @@ class RequestViewSet(
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
 
-        # Si no hay paginación, devuelve la lista completa
         serializer = self.get_serializer(qs, many=True)
         return response.Response(serializer.data, status=status.HTTP_200_OK)
-
 
 
 @extend_schema(
@@ -129,8 +122,8 @@ class RequestViewSet(
     ],
 )
 class CommitmentViewSet(
-    mixins.CreateModelMixin,      # POST /api/commitments/
-    mixins.RetrieveModelMixin,    # GET /api/commitments/{id}/
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
     viewsets.GenericViewSet
 ):
     """🤝 Endpoints para compromisos (alta, ejecución y consulta de estado)"""
@@ -141,15 +134,14 @@ class CommitmentViewSet(
 
     @transaction.atomic
     def perform_create(self, serializer):
-        """Crea un compromiso en estado ACTIVE y actualiza los totales del pedido"""
+        """
+        Crea un compromiso en estado ACTIVE y llama al servicio
+        para actualizar los totales del pedido.
+        """
         commit = serializer.save(status=CommitmentStatus.ACTIVE)
-        req = CollaborationRequest.objects.select_for_update().get(pk=commit.request_id)
+        update_request_on_new_commitment(commit)
+        serializer.instance = commit
 
-        if commit.amount:
-            req.reserved_qty = (req.reserved_qty or Decimal("0")) + commit.amount
-
-        recompute_request_status(req)
-        req.save(update_fields=["reserved_qty", "status"])
 
     @extend_schema(
         tags=["Commitments"],
@@ -158,32 +150,37 @@ class CommitmentViewSet(
         description="Completa un compromiso, moviendo su monto de reservado a cumplido y recalculando el estado del pedido asociado.",
         request=None,
         responses={
-            200: OpenApiExample(
-                "Ejecución OK",
-                value={"ok": True},
-                response_only=True
-            )
+            200: OpenApiExample("Ejecución OK", value={"ok": True}, response_only=True),
+            400: OpenApiExample("Error de negocio", value={"ok": False, "error": "Este compromiso ya fue ejecutado previamente."}, response_only=True),
+            404: OpenApiExample("No encontrado", value={"ok": False, "error": "No se encontró el compromiso."}, response_only=True),
         }
     )
     @decorators.action(detail=True, methods=["post"])
-    @transaction.atomic
     def execute(self, request, pk=None):
-        """Ejecuta (cumple) un compromiso"""
-        commit = self.get_object()
-        if commit.status == CommitmentStatus.FULFILLED:
-            return response.Response({"detail": "Ya estaba completado."}, status=status.HTTP_200_OK)
-
-        req = CollaborationRequest.objects.select_for_update().get(pk=commit.request_id)
-
-        amt = commit.amount or Decimal("0")
-        if amt > 0:
-            req.reserved_qty = max(Decimal("0"), (req.reserved_qty or Decimal("0")) - amt)
-            req.fulfilled_qty = (req.fulfilled_qty or Decimal("0")) + amt
-
-        commit.status = CommitmentStatus.FULFILLED
-        commit.save(update_fields=["status"])
-
-        recompute_request_status(req)
-        req.save(update_fields=["reserved_qty", "fulfilled_qty", "status"])
-
-        return response.Response({"ok": True}, status=status.HTTP_200_OK)
+        """
+        Ejecuta (cumple) un compromiso, con manejo de excepciones.
+        """
+        try:
+            commit = self.get_object() 
+            execute_commitment_service(commit) 
+            return response.Response({"ok": True}, status=status.HTTP_200_OK)
+        except Http404:
+            return response.Response(
+                {"ok": False, "error": "No se encontró el compromiso con el ID proporcionado."}, 
+                status=status.HTTP_404_NOT_FOUND
+            )  
+        except (BusinessLogicError, RelatedRequestNotFoundError) as e:
+            return response.Response(
+                {"ok": False, "error": e.detail}, 
+                status=e.status_code
+            )
+        except ValidationError as e:
+            return response.Response(
+                {"ok": False, "error": "Datos inválidos.", "details": e.detail}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return response.Response(
+                {"ok": False, "error": "Ocurrió un error interno inesperado al procesar la solicitud."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
