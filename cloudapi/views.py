@@ -4,8 +4,8 @@ from rest_framework import viewsets, mixins, decorators, response, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 
-from .models import CollaborationRequest, Commitment, CommitmentStatus
-from .serializers import CollaborationRequestSerializer, CommitmentSerializer
+from .models import CollaborationRequest, Commitment, CommitmentStatus, Stage, Observation
+from .serializers import CollaborationRequestSerializer, CommitmentSerializer, StageSerializer, ObservationSerializer
 
 from .services import (
     recompute_request_status, 
@@ -184,3 +184,98 @@ class CommitmentViewSet(
                 {"ok": False, "error": "Ocurrió un error interno inesperado al procesar la solicitud."}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+@extend_schema(
+    tags=["Stages"],
+    description="Permite registrar nuevas etapas de proyecto o consultar las existentes.",
+)
+class StageViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet
+):
+    """📋 Endpoints para Etapas del plan de trabajo"""
+    queryset = Stage.objects.all().order_by("created_at")
+    serializer_class = StageSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post"]
+
+    def get_queryset(self):
+        """Permite filtrar por project_ref"""
+        qs = super().get_queryset()
+        project_ref = self.request.query_params.get("project_ref")
+        if project_ref:
+            qs = qs.filter(project_ref=project_ref)
+        return qs
+
+    @extend_schema(
+        tags=["Stages"],
+        operation_id="list_stages_by_project",
+        description="Recupera todas las etapas asociadas a un proyecto determinado, usando su UUID como parte de la URL.",
+        request=None, 
+        responses={200: StageSerializer(many=True)} 
+    )
+    @decorators.action(
+        detail=False, 
+        methods=["get"], 
+        url_path='by-project/(?P<project_ref>[0-9a-f-]{36})'
+    )
+    def by_project(self, request, project_ref=None):
+        """Recupera etapas en base a un project_ref."""
+        qs = self.get_queryset().filter(project_ref=project_ref)
+
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(qs, many=True)
+        return response.Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=["Observations"],
+    description="Permite registrar nuevas observaciones del consejo directivo o consultar las existentes.",
+)
+class ObservationViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet
+):
+    """🔎 Endpoints para Observaciones del Consejo Directivo"""
+    queryset = Observation.objects.all().order_by("-created_at")
+    serializer_class = ObservationSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post"]
+
+    def get_queryset(self):
+        """Permite filtrar por project_ref"""
+        qs = super().get_queryset()
+        project_ref = self.request.query_params.get("project_ref")
+        if project_ref:
+            qs = qs.filter(project_ref=project_ref)
+        return qs
+
+    @extend_schema(
+        tags=["Observations"],
+        operation_id="list_observations_by_project",
+        description="Recupera todas las observaciones asociadas a un proyecto determinado, usando su UUID como parte de la URL.",
+        request=None, 
+        responses={200: ObservationSerializer(many=True)} 
+    )
+    @decorators.action(
+        detail=False, 
+        methods=["get"], 
+        url_path='by-project/(?P<project_ref>[0-9a-f-]{36})'
+    )
+    def by_project(self, request, project_ref=None):
+        """Recupera observaciones en base a un project_ref."""
+        qs = self.get_queryset().filter(project_ref=project_ref)
+
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(qs, many=True)
+        return response.Response(serializer.data, status=status.HTTP_200_OK)

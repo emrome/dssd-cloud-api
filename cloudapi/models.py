@@ -24,6 +24,10 @@ class CommitmentStatus(models.TextChoices):
 
 
 class CollaborationRequest(models.Model):
+    """
+    Pedido de colaboración (dinero, materiales, etc.) vinculado a un proyecto
+    y a una necesidad de Bonita por UUIDs
+    """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     project_ref = models.UUIDField(db_index=True)
@@ -73,6 +77,9 @@ class CollaborationRequest(models.Model):
 
 
 class Commitment(models.Model):
+    """
+    Compromiso de colaboración asociado a un CollaborationRequest
+    """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     request = models.ForeignKey(
         CollaborationRequest, on_delete=models.CASCADE, related_name="commitments"
@@ -102,3 +109,37 @@ class Commitment(models.Model):
     def __str__(self):
         who = self.actor_label or "Sin actor"
         return f"Compromiso de {who} → {self.request.title} ({self.status})"
+
+class Stage(models.Model):
+    """
+    Etapa del plan de trabajo de un proyecto.
+    Se vincula a un proyecto externo vía project_ref.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project_ref = models.UUIDField(db_index=True, help_text="UUID del Proyecto en Bonita/App")
+    
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+class Observation(models.Model):
+    """
+    Observación o informe de sugerencias del Consejo Directivo.
+    Se vincula a un proyecto externo vía project_ref.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project_ref = models.UUIDField(db_index=True, help_text="UUID del Proyecto en Bonita/App")
+    
+    observer_label = models.CharField(max_length=150, help_text="Nombre del Consejo o supervisor")
+    text = models.TextField(help_text="Descripción de la observación o mejora")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Observación para {self.project_ref}"

@@ -1,8 +1,11 @@
 from decimal import Decimal
 from rest_framework import serializers
-from .models import CollaborationRequest, Commitment
+from .models import CollaborationRequest, Commitment, Stage, Observation
 
 class CollaborationRequestSerializer(serializers.ModelSerializer):
+    """
+    Serializador para las Solicitudes de colaboración.
+    """
     class Meta:
         model = CollaborationRequest
         fields = "__all__"
@@ -16,6 +19,9 @@ class CollaborationRequestSerializer(serializers.ModelSerializer):
 
 
 class CommitmentSerializer(serializers.ModelSerializer):
+    """
+    Serializador para los Compromisos de colaboración.
+    """
     class Meta:
         model = Commitment
         fields = "__all__"
@@ -35,3 +41,21 @@ class CommitmentSerializer(serializers.ModelSerializer):
                         {"amount": "La reserva total excede el objetivo (target_qty)."}
                     )
         return attrs
+
+class StageSerializer(serializers.ModelSerializer):
+    """
+    Serializador para las Etapas.
+    """
+    class Meta:
+        model = Stage
+        fields = "__all__"
+        read_only_fields = ("id", "created_at")
+
+class ObservationSerializer(serializers.ModelSerializer):
+    """
+    Serializador para las Observaciones.
+    """
+    class Meta:
+        model = Observation
+        fields = "__all__"
+        read_only_fields = ("id", "created_at")
