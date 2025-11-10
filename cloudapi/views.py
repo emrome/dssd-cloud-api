@@ -4,8 +4,15 @@ from rest_framework import viewsets, mixins, decorators, response, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 
-from .models import CollaborationRequest, Commitment, CommitmentStatus, Stage, Observation
-from .serializers import CollaborationRequestSerializer, CommitmentSerializer, StageSerializer, ObservationSerializer
+from .models import (
+    CollaborationRequest, Commitment, CommitmentStatus, 
+    Stage, Observation, Project, User
+)
+from .serializers import (
+    CollaborationRequestSerializer, CommitmentSerializer, 
+    StageSerializer, ObservationSerializer,
+    ProjectSerializer, UserSerializer
+)
 
 from .services import (
     recompute_request_status, 
@@ -25,8 +32,8 @@ from drf_spectacular.utils import extend_schema, OpenApiExample
         OpenApiExample(
             "Crear pedido (Materiales)",
             value={
-                "project_ref": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-                "need_ref": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                # CORREGIDO: El campo se llama 'project' en el modelo/serializador
+                "project": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
                 "title": "Cemento",
                 "description": "10 bolsas para la obra",
                 "request_type": "MAT",
@@ -37,8 +44,8 @@ from drf_spectacular.utils import extend_schema, OpenApiExample
         OpenApiExample(
             "Crear pedido (Económica)",
             value={
-                "project_ref": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-                "need_ref": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+                # CORREGIDO: El campo se llama 'project' en el modelo/serializador
+                "project": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
                 "title": "Recaudación para materiales",
                 "description": "Fondos para compra de cemento y arena",
                 "request_type": "ECON",
@@ -54,20 +61,25 @@ class RequestViewSet(
     viewsets.GenericViewSet
 ):
     """📘 Endpoints para pedidos de colaboración"""
-    queryset = CollaborationRequest.objects.all().order_by("-created_at")
+    # CORREGIDO: Hacemos select_related del proyecto para optimizar
+    queryset = CollaborationRequest.objects.select_related("project").all().order_by("-created_at")
     serializer_class = CollaborationRequestSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "post"]
 
     def get_queryset(self):
-        """Permite filtrar por project_ref o need_ref"""
+        """Permite filtrar por project_id"""
         qs = super().get_queryset()
-        project_ref = self.request.query_params.get("project_ref")
-        need_ref = self.request.query_params.get("need_ref")
-        if project_ref:
-            qs = qs.filter(project_ref=project_ref)
-        if need_ref:
-            qs = qs.filter(need_ref=need_ref)
+        
+        # CORREGIDO: El parámetro de filtro debe ser 'project_id' (o 'project')
+        project_id = self.request.query_params.get("project_id")
+        
+        # CORREGIDO: Filtrar por 'project_id'
+        if project_id:
+            qs = qs.filter(project_id=project_id)
+        
+        # ELIMINADO: 'need_ref' no existe en el modelo CollaborationRequest
+        
         return qs
 
     @transaction.atomic
@@ -90,11 +102,13 @@ class RequestViewSet(
     @decorators.action(
         detail=False, 
         methods=["get"], 
-        url_path='by-project/(?P<project_ref>[0-9a-f-]{36})'
+        # CORREGIDO: Renombrado el parámetro en la URL para claridad
+        url_path='by-project/(?P<project_id>[0-9a-f-]{36})'
     )
-    def by_project(self, request, project_ref=None):
-        """Recupera pedidos en base a un project_ref."""
-        qs = self.get_queryset().filter(project_ref=project_ref)
+    def by_project(self, request, project_id=None):
+        """Recupera pedidos en base a un project_id."""
+        # CORREGIDO: Filtrar por project_id
+        qs = self.get_queryset().filter(project_id=project_id)
 
         page = self.paginate_queryset(qs)
         if page is not None:
@@ -112,6 +126,7 @@ class RequestViewSet(
         OpenApiExample(
             "Crear compromiso parcial",
             value={
+                # ESTE ESTABA BIEN: El campo se llama 'request'
                 "request": "11111111-1111-1111-1111-111111111111",
                 "actor_label": "ONG Vecinos",
                 "amount": "5",
@@ -180,6 +195,8 @@ class CommitmentViewSet(
                 status=status.HTTP_400_BAD_REQUEST
             )
         except Exception as e:
+            # Es buena idea loggear el error real aquí
+            # logger.error(f"Error inesperado en execute_commitment: {e}", exc_info=True)
             return response.Response(
                 {"ok": False, "error": "Ocurrió un error interno inesperado al procesar la solicitud."}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -195,17 +212,21 @@ class StageViewSet(
     viewsets.GenericViewSet
 ):
     """📋 Endpoints para Etapas del plan de trabajo"""
-    queryset = Stage.objects.all().order_by("created_at")
+    queryset = Stage.objects.select_related("project").all().order_by("created_at")
     serializer_class = StageSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "post"]
 
     def get_queryset(self):
-        """Permite filtrar por project_ref"""
+        """Permite filtrar por project_id"""
         qs = super().get_queryset()
-        project_ref = self.request.query_params.get("project_ref")
-        if project_ref:
-            qs = qs.filter(project_ref=project_ref)
+        
+        # CORREGIDO: El parámetro de filtro debe ser 'project_id'
+        project_id = self.request.query_params.get("project_id")
+        
+        # CORREGIDO: Filtrar por 'project_id'
+        if project_id:
+            qs = qs.filter(project_id=project_id)
         return qs
 
     @extend_schema(
@@ -218,11 +239,13 @@ class StageViewSet(
     @decorators.action(
         detail=False, 
         methods=["get"], 
-        url_path='by-project/(?P<project_ref>[0-9a-f-]{36})'
+        # CORREGIDO: Renombrado el parámetro en la URL
+        url_path='by-project/(?P<project_id>[0-9a-f-]{36})'
     )
-    def by_project(self, request, project_ref=None):
-        """Recupera etapas en base a un project_ref."""
-        qs = self.get_queryset().filter(project_ref=project_ref)
+    def by_project(self, request, project_id=None):
+        """Recupera etapas en base a un project_id."""
+        # CORREGIDO: Filtrar por project_id
+        qs = self.get_queryset().filter(project_id=project_id)
 
         page = self.paginate_queryset(qs)
         if page is not None:
@@ -243,17 +266,21 @@ class ObservationViewSet(
     viewsets.GenericViewSet
 ):
     """🔎 Endpoints para Observaciones del Consejo Directivo"""
-    queryset = Observation.objects.all().order_by("-created_at")
+    queryset = Observation.objects.select_related("project").all().order_by("-created_at")
     serializer_class = ObservationSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "post"]
 
     def get_queryset(self):
-        """Permite filtrar por project_ref"""
+        """Permite filtrar por project_id"""
         qs = super().get_queryset()
-        project_ref = self.request.query_params.get("project_ref")
-        if project_ref:
-            qs = qs.filter(project_ref=project_ref)
+        
+        # CORREGIDO: El parámetro de filtro debe ser 'project_id'
+        project_id = self.request.query_params.get("project_id")
+        
+        # CORREGIDO: Filtrar por 'project_id'
+        if project_id:
+            qs = qs.filter(project_id=project_id)
         return qs
 
     @extend_schema(
@@ -266,11 +293,13 @@ class ObservationViewSet(
     @decorators.action(
         detail=False, 
         methods=["get"], 
-        url_path='by-project/(?P<project_ref>[0-9a-f-]{36})'
+        # CORREGIDO: Renombrado el parámetro en la URL
+        url_path='by-project/(?P<project_id>[0-9a-f-]{36})'
     )
-    def by_project(self, request, project_ref=None):
-        """Recupera observaciones en base a un project_ref."""
-        qs = self.get_queryset().filter(project_ref=project_ref)
+    def by_project(self, request, project_id=None):
+        """Recupera observaciones en base a un project_id."""
+        # CORREGIDO: Filtrar por project_id
+        qs = self.get_queryset().filter(project_id=project_id)
 
         page = self.paginate_queryset(qs)
         if page is not None:
@@ -279,3 +308,45 @@ class ObservationViewSet(
 
         serializer = self.get_serializer(qs, many=True)
         return response.Response(serializer.data, status=status.HTTP_200_OK)
+
+@extend_schema(
+    tags=["Projects"],
+    description="Permite crear, listar y consultar proyectos. Al consultar un proyecto individual (retrieve), se incluye toda su información asociada: pedidos, etapas y observaciones.",
+)
+class ProjectViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet
+):
+    """🏗️ Endpoints para Proyectos"""
+    
+    # Esta vista estaba bien.
+    queryset = Project.objects.prefetch_related(
+        'requests', 
+        'stages', 
+        'observations'
+    ).order_by("-created_at")
+    
+    serializer_class = ProjectSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post"]
+
+
+@extend_schema(
+    tags=["Users"],
+    description="Permite crear, listar y consultar usuarios del sistema.",
+)
+class UserViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet
+):
+    """👤 Endpoints para Usuarios"""
+    
+    # Esta vista también estaba bien.
+    queryset = User.objects.all().order_by("-created_at")
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post"]

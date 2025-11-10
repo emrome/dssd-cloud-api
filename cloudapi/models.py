@@ -22,16 +22,41 @@ class CommitmentStatus(models.TextChoices):
     FULFILLED = "FULFILLED", "Completado"
     CANCELLED = "CANCELLED", "Cancelado"
 
+class Project(models.Model):
+    """
+    Proyecto.
+    Usa un UUID como PK para ser consistente con las URLs de la API y Bonita.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    created_by_ong = models.CharField(max_length=200, blank=True)
+    bonita_case_id = models.CharField(max_length=64, blank=True, null=True)
+    
+    # Podríamos vincularlo al usuario de Django que lo crea
+    # created_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self): 
+        return f"{self.name} ({self.start_date} – {self.end_date})"
+
+    class Meta:
+        db_table = "projects"
+        ordering = ['-created_at']
+
 
 class CollaborationRequest(models.Model):
     """
-    Pedido de colaboración (dinero, materiales, etc.) vinculado a un proyecto
-    y a una necesidad de Bonita por UUIDs
+    Pedido de colaboración (dinero, materiales, etc.)
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-
-    project_ref = models.UUIDField(db_index=True)
-    need_ref = models.UUIDField(db_index=True)
+    
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="requests")
 
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
@@ -55,21 +80,12 @@ class CollaborationRequest(models.Model):
         db_table = 'collaboration_request'
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["project_ref"]),
-            models.Index(fields=["need_ref"]),
+            models.Index(fields=["project"]), # Índice en el FK
             models.Index(fields=["status"]),
         ]
         constraints = [
             models.CheckConstraint(check=Q(reserved_qty__gte=0), name="req_reserved_nonneg"),
             models.CheckConstraint(check=Q(fulfilled_qty__gte=0), name="req_fulfilled_nonneg"),
-            models.CheckConstraint(
-                check=Q(target_qty__isnull=True) | Q(fulfilled_qty__lte=F("target_qty")),
-                name="req_fulfilled_lte_target_if_set",
-            ),
-            models.CheckConstraint(
-                check=Q(target_qty__isnull=True) | Q(reserved_qty__lte=F("target_qty")),
-                name="req_reserved_lte_target_if_set",
-            ),
         ]
 
     def __str__(self):
@@ -78,7 +94,7 @@ class CollaborationRequest(models.Model):
 
 class Commitment(models.Model):
     """
-    Compromiso de colaboración asociado a un CollaborationRequest
+    Compromiso de colaboración.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     request = models.ForeignKey(
@@ -110,13 +126,14 @@ class Commitment(models.Model):
         who = self.actor_label or "Sin actor"
         return f"Compromiso de {who} → {self.request.title} ({self.status})"
 
+
 class Stage(models.Model):
     """
     Etapa del plan de trabajo de un proyecto.
-    Se vincula a un proyecto externo vía project_ref.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    project_ref = models.UUIDField(db_index=True, help_text="UUID del Proyecto en Bonita/App")
+    
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="stages")
     
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
@@ -124,22 +141,47 @@ class Stage(models.Model):
     end_date = models.DateField(null=True, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['start_date', 'created_at']
 
     def __str__(self):
         return self.name
 
 class Observation(models.Model):
     """
-    Observación o informe de sugerencias del Consejo Directivo.
-    Se vincula a un proyecto externo vía project_ref.
+    Observación del Consejo Directivo.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    project_ref = models.UUIDField(db_index=True, help_text="UUID del Proyecto en Bonita/App")
+    
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="observations")
     
     observer_label = models.CharField(max_length=150, help_text="Nombre del Consejo o supervisor")
     text = models.TextField(help_text="Descripción de la observación o mejora")
     
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
-        return f"Observación para {self.project_ref}"
+        return f"Observación para {self.project.name}"
+
+class User(models.Model):
+    """
+    Usuario del sistema.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    name = models.CharField(max_length=200)
+    email = models.EmailField(unique=True)
+    password = models.CharField(max_length=128)  # Hasheada en lo posible
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self): 
+        return f"{self.name} <{self.email}>"
+
+    class Meta:
+        db_table = "users"
+        ordering = ['-created_at']

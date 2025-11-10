@@ -7,7 +7,6 @@ from .exceptions import CommitmentAlreadyExecutedError, RelatedRequestNotFoundEr
 def recompute_request_status(req: CollaborationRequest) -> None:
     """
     Recalcula el estado de un Pedido en base a sus cantidades.
-    Esta lógica es más clara y robusta que la original.
     
     Reglas:
     1. Si tiene objetivo (target) Y se cumplió (fulfilled >= target), está COMPLETED.
@@ -27,8 +26,6 @@ def recompute_request_status(req: CollaborationRequest) -> None:
         return
 
     # Caso 3: Reservado (todos los demás casos intermedios)
-    # - Hay reservas (req.reserved_qty > 0)
-    # - Hay cumplidos, pero no se llegó al objetivo
     req.status = RequestStatus.RESERVED
 
 @transaction.atomic
@@ -65,6 +62,7 @@ def execute_commitment_service(commit: Commitment) -> None:
         
         amt = commit.amount or Decimal("0")
         if amt > 0:
+            # Asegurarse de no dejar valores negativos
             req.reserved_qty = max(Decimal("0"), (req.reserved_qty or Decimal("0")) - amt)
             req.fulfilled_qty = (req.fulfilled_qty or Decimal("0")) + amt
 

@@ -1,61 +1,89 @@
-from decimal import Decimal
 from rest_framework import serializers
-from .models import CollaborationRequest, Commitment, Stage, Observation
+from .models import (
+    Project, 
+    CollaborationRequest, 
+    Commitment, 
+    Stage, 
+    Observation, 
+    User
+)
 
-class CollaborationRequestSerializer(serializers.ModelSerializer):
+class UserSerializer(serializers.ModelSerializer):
     """
-    Serializador para las Solicitudes de colaboración.
+    Serializador para el modelo de User.
+    Maneja el hasheo de la contraseña en la creación.
     """
     class Meta:
-        model = CollaborationRequest
-        fields = "__all__"
-        read_only_fields = ("reserved_qty", "fulfilled_qty", "status", "created_at", "updated_at")
+        model = User
+        fields = ['id', 'name', 'email', 'password', 'created_at']
+        extra_kwargs = {
+            'password': {'write_only': True} # Ocultar password en respuestas GET
+        }
 
-    def validate(self, attrs):
-        target = attrs.get("target_qty")
-        if target is not None and target < 0:
-            raise serializers.ValidationError({"target_qty": "No puede ser negativo."})
-        return attrs
-
+    def create(self, validated_data):
+        # Hashear la contraseña al crear el usuario
+        user = User(
+            email=validated_data['email'],
+            name=validated_data['name']
+        )
+        user.set_password(validated_data['password'])
+        user.save()
+        return user
 
 class CommitmentSerializer(serializers.ModelSerializer):
     """
-    Serializador para los Compromisos de colaboración.
+    Serializador para Compromisos.
     """
     class Meta:
         model = Commitment
-        fields = "__all__"
-        read_only_fields = ("status", "commitment_date", "updated_at")
+        fields = '__all__'
+        read_only_fields = ('status', 'commitment_date', 'updated_at')
 
-    def validate(self, attrs):
-        req = attrs.get("request") or self.instance.request  # create or update
-        amt = attrs.get("amount")
-        if amt is not None and amt < 0:
-            raise serializers.ValidationError({"amount": "No puede ser negativo."})
-
-        target = req.target_qty
-        if self.instance is None:  # create
-            if target is not None and amt is not None:
-                if req.reserved_qty + amt > target:
-                    raise serializers.ValidationError(
-                        {"amount": "La reserva total excede el objetivo (target_qty)."}
-                    )
-        return attrs
+class CollaborationRequestSerializer(serializers.ModelSerializer):
+    """
+    Serializador para Pedidos de Colaboración.
+    Incluye los compromisos anidados (solo lectura).
+    """
+    commitments = CommitmentSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = CollaborationRequest
+        fields = '__all__'
+        read_only_fields = ('reserved_qty', 'fulfilled_qty', 'status', 'created_at', 'updated_at')
 
 class StageSerializer(serializers.ModelSerializer):
     """
-    Serializador para las Etapas.
+    Serializador para Etapas.
     """
     class Meta:
         model = Stage
-        fields = "__all__"
-        read_only_fields = ("id", "created_at")
+        fields = '__all__'
+        read_only_fields = ('created_at',)
 
 class ObservationSerializer(serializers.ModelSerializer):
     """
-    Serializador para las Observaciones.
+    Serializador para Observaciones.
     """
     class Meta:
         model = Observation
-        fields = "__all__"
-        read_only_fields = ("id", "created_at")
+        fields = '__all__'
+        read_only_fields = ('created_at',)
+
+class ProjectSerializer(serializers.ModelSerializer):
+    """
+    Serializador para Proyectos.
+    Incluye todas las relaciones anidadas (solo lectura)
+    para tener una vista completa del proyecto.
+    """
+    requests = CollaborationRequestSerializer(many=True, read_only=True)
+    stages = StageSerializer(many=True, read_only=True)
+    observations = ObservationSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Project
+        fields = [
+            'id', 'name', 'description', 'start_date', 'end_date', 
+            'created_by_ong', 'bonita_case_id', 'created_at', 'updated_at',
+            'requests', 'stages', 'observations'
+        ]
+        read_only_fields = ('created_at', 'updated_at', 'requests', 'stages', 'observations')
