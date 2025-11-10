@@ -32,7 +32,6 @@ from drf_spectacular.utils import extend_schema, OpenApiExample
         OpenApiExample(
             "Crear pedido (Materiales)",
             value={
-                # CORREGIDO: El campo se llama 'project' en el modelo/serializador
                 "project": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
                 "title": "Cemento",
                 "description": "10 bolsas para la obra",
@@ -44,7 +43,6 @@ from drf_spectacular.utils import extend_schema, OpenApiExample
         OpenApiExample(
             "Crear pedido (Económica)",
             value={
-                # CORREGIDO: El campo se llama 'project' en el modelo/serializador
                 "project": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
                 "title": "Recaudación para materiales",
                 "description": "Fondos para compra de cemento y arena",
@@ -61,7 +59,6 @@ class RequestViewSet(
     viewsets.GenericViewSet
 ):
     """📘 Endpoints para pedidos de colaboración"""
-    # CORREGIDO: Hacemos select_related del proyecto para optimizar
     queryset = CollaborationRequest.objects.select_related("project").all().order_by("-created_at")
     serializer_class = CollaborationRequestSerializer
     permission_classes = [IsAuthenticated]
@@ -71,15 +68,11 @@ class RequestViewSet(
         """Permite filtrar por project_id"""
         qs = super().get_queryset()
         
-        # CORREGIDO: El parámetro de filtro debe ser 'project_id' (o 'project')
         project_id = self.request.query_params.get("project_id")
         
-        # CORREGIDO: Filtrar por 'project_id'
         if project_id:
             qs = qs.filter(project_id=project_id)
-        
-        # ELIMINADO: 'need_ref' no existe en el modelo CollaborationRequest
-        
+                
         return qs
 
     @transaction.atomic
@@ -102,12 +95,10 @@ class RequestViewSet(
     @decorators.action(
         detail=False, 
         methods=["get"], 
-        # CORREGIDO: Renombrado el parámetro en la URL para claridad
         url_path='by-project/(?P<project_id>[0-9a-f-]{36})'
     )
     def by_project(self, request, project_id=None):
         """Recupera pedidos en base a un project_id."""
-        # CORREGIDO: Filtrar por project_id
         qs = self.get_queryset().filter(project_id=project_id)
 
         page = self.paginate_queryset(qs)
@@ -126,7 +117,6 @@ class RequestViewSet(
         OpenApiExample(
             "Crear compromiso parcial",
             value={
-                # ESTE ESTABA BIEN: El campo se llama 'request'
                 "request": "11111111-1111-1111-1111-111111111111",
                 "actor_label": "ONG Vecinos",
                 "amount": "5",
@@ -195,8 +185,6 @@ class CommitmentViewSet(
                 status=status.HTTP_400_BAD_REQUEST
             )
         except Exception as e:
-            # Es buena idea loggear el error real aquí
-            # logger.error(f"Error inesperado en execute_commitment: {e}", exc_info=True)
             return response.Response(
                 {"ok": False, "error": "Ocurrió un error interno inesperado al procesar la solicitud."}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -221,10 +209,8 @@ class StageViewSet(
         """Permite filtrar por project_id"""
         qs = super().get_queryset()
         
-        # CORREGIDO: El parámetro de filtro debe ser 'project_id'
         project_id = self.request.query_params.get("project_id")
         
-        # CORREGIDO: Filtrar por 'project_id'
         if project_id:
             qs = qs.filter(project_id=project_id)
         return qs
@@ -239,12 +225,10 @@ class StageViewSet(
     @decorators.action(
         detail=False, 
         methods=["get"], 
-        # CORREGIDO: Renombrado el parámetro en la URL
         url_path='by-project/(?P<project_id>[0-9a-f-]{36})'
     )
     def by_project(self, request, project_id=None):
         """Recupera etapas en base a un project_id."""
-        # CORREGIDO: Filtrar por project_id
         qs = self.get_queryset().filter(project_id=project_id)
 
         page = self.paginate_queryset(qs)
@@ -275,10 +259,8 @@ class ObservationViewSet(
         """Permite filtrar por project_id"""
         qs = super().get_queryset()
         
-        # CORREGIDO: El parámetro de filtro debe ser 'project_id'
         project_id = self.request.query_params.get("project_id")
         
-        # CORREGIDO: Filtrar por 'project_id'
         if project_id:
             qs = qs.filter(project_id=project_id)
         return qs
@@ -293,12 +275,10 @@ class ObservationViewSet(
     @decorators.action(
         detail=False, 
         methods=["get"], 
-        # CORREGIDO: Renombrado el parámetro en la URL
         url_path='by-project/(?P<project_id>[0-9a-f-]{36})'
     )
     def by_project(self, request, project_id=None):
         """Recupera observaciones en base a un project_id."""
-        # CORREGIDO: Filtrar por project_id
         qs = self.get_queryset().filter(project_id=project_id)
 
         page = self.paginate_queryset(qs)
@@ -321,7 +301,6 @@ class ProjectViewSet(
 ):
     """🏗️ Endpoints para Proyectos"""
     
-    # Esta vista estaba bien.
     queryset = Project.objects.prefetch_related(
         'requests', 
         'stages', 
@@ -344,9 +323,9 @@ class UserViewSet(
     viewsets.GenericViewSet
 ):
     """👤 Endpoints para Usuarios"""
-    
-    # Esta vista también estaba bien.
+
     queryset = User.objects.all().order_by("-created_at")
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "post"]
+    
