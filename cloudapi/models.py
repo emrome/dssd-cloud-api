@@ -1,4 +1,3 @@
-import uuid
 from django.db import models
 from django.core.validators import MinValueValidator
 from django.db.models import Q, F
@@ -25,9 +24,7 @@ class CommitmentStatus(models.TextChoices):
 class Project(models.Model):
     """
     Proyecto.
-    Usa un UUID como PK para ser consistente con las URLs de la API y Bonita.
     """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
@@ -54,7 +51,6 @@ class CollaborationRequest(models.Model):
     """
     Pedido de colaboración (dinero, materiales, etc.)
     """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="requests")
 
@@ -96,7 +92,6 @@ class Commitment(models.Model):
     """
     Compromiso de colaboración.
     """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     request = models.ForeignKey(
         CollaborationRequest, on_delete=models.CASCADE, related_name="commitments"
     )
@@ -131,7 +126,6 @@ class Stage(models.Model):
     """
     Etapa del plan de trabajo de un proyecto.
     """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="stages")
     
@@ -152,7 +146,6 @@ class Observation(models.Model):
     """
     Observación del Consejo Directivo.
     """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="observations")
     
@@ -171,7 +164,6 @@ class User(models.Model):
     """
     Usuario del sistema.
     """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
     name = models.CharField(max_length=200)
     email = models.EmailField(unique=True)

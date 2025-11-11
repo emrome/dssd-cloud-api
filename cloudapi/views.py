@@ -32,7 +32,8 @@ from drf_spectacular.utils import extend_schema, OpenApiExample
         OpenApiExample(
             "Crear pedido (Materiales)",
             value={
-                "project": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                # CAMBIO: De UUID a un ID numérico
+                "project": 1, 
                 "title": "Cemento",
                 "description": "10 bolsas para la obra",
                 "request_type": "MAT",
@@ -43,7 +44,8 @@ from drf_spectacular.utils import extend_schema, OpenApiExample
         OpenApiExample(
             "Crear pedido (Económica)",
             value={
-                "project": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                # CAMBIO: De UUID a un ID numérico
+                "project": 1,
                 "title": "Recaudación para materiales",
                 "description": "Fondos para compra de cemento y arena",
                 "request_type": "ECON",
@@ -88,14 +90,15 @@ class RequestViewSet(
     @extend_schema(
         tags=["Requests"],
         operation_id="list_requests_by_project",
-        description="Recupera todos los pedidos de colaboración asociados a un proyecto determinado, usando su UUID como parte de la URL.",
+        description="Recupera todos los pedidos de colaboración asociados a un proyecto determinado, usando su ID como parte de la URL.",
         request=None, 
         responses={200: CollaborationRequestSerializer(many=True)} 
     )
     @decorators.action(
         detail=False, 
         methods=["get"], 
-        url_path='by-project/(?P<project_id>[0-9a-f-]{36})'
+        # CAMBIO: Regex de UUID a regex de número
+        url_path='by-project/(?P<project_id>[0-9]+)'
     )
     def by_project(self, request, project_id=None):
         """Recupera pedidos en base a un project_id."""
@@ -117,7 +120,8 @@ class RequestViewSet(
         OpenApiExample(
             "Crear compromiso parcial",
             value={
-                "request": "11111111-1111-1111-1111-111111111111",
+                # CAMBIO: De UUID a un ID numérico
+                "request": 1,
                 "actor_label": "ONG Vecinos",
                 "amount": "5",
                 "description": "Aporto 5 bolsas"
@@ -218,14 +222,15 @@ class StageViewSet(
     @extend_schema(
         tags=["Stages"],
         operation_id="list_stages_by_project",
-        description="Recupera todas las etapas asociadas a un proyecto determinado, usando su UUID como parte de la URL.",
+        description="Recupera todas las etapas asociadas a un proyecto determinado, usando su ID como parte de la URL.",
         request=None, 
         responses={200: StageSerializer(many=True)} 
     )
     @decorators.action(
         detail=False, 
         methods=["get"], 
-        url_path='by-project/(?P<project_id>[0-9a-f-]{36})'
+        # CAMBIO: Regex de UUID a regex de número
+        url_path='by-project/(?P<project_id>[0-9]+)'
     )
     def by_project(self, request, project_id=None):
         """Recupera etapas en base a un project_id."""
@@ -268,14 +273,15 @@ class ObservationViewSet(
     @extend_schema(
         tags=["Observations"],
         operation_id="list_observations_by_project",
-        description="Recupera todas las observaciones asociadas a un proyecto determinado, usando su UUID como parte de la URL.",
+        description="Recupera todas las observaciones asociadas a un proyecto determinado, usando su ID como parte de la URL.",
         request=None, 
         responses={200: ObservationSerializer(many=True)} 
     )
     @decorators.action(
         detail=False, 
         methods=["get"], 
-        url_path='by-project/(?P<project_id>[0-9a-f-]{36})'
+        # CAMBIO: Regex de UUID a regex de número
+        url_path='by-project/(?P<project_id>[0-9]+)'
     )
     def by_project(self, request, project_id=None):
         """Recupera observaciones en base a un project_id."""
@@ -328,4 +334,3 @@ class UserViewSet(
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "post"]
-    
