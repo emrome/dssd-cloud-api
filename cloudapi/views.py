@@ -5,13 +5,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 
 from .models import (
-    CollaborationRequest, Commitment, CommitmentStatus, 
-    Stage, Observation, Project, User
+    CollaborationRequest, Commitment, CommitmentStatus
 )
 from .serializers import (
-    CollaborationRequestSerializer, CommitmentSerializer, 
-    StageSerializer, ObservationSerializer,
-    ProjectSerializer, UserSerializer
+    CollaborationRequestSerializer, CommitmentSerializer, CreateCollaborationRequestSerializer
 )
 
 from .services import (
@@ -20,8 +17,6 @@ from .services import (
     execute_commitment_service
 )
 from .exceptions import BusinessLogicError, RelatedRequestNotFoundError
-
-# Swagger
 from drf_spectacular.utils import extend_schema, OpenApiExample
 
 
@@ -61,7 +56,7 @@ class RequestViewSet(
     viewsets.GenericViewSet
 ):
     """📘 Endpoints para pedidos de colaboración"""
-    queryset = CollaborationRequest.objects.select_related("project").all().order_by("-created_at")
+    queryset = CollaborationRequest.objects.all().order_by("-created_at")
     serializer_class = CollaborationRequestSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "post"]
@@ -69,12 +64,9 @@ class RequestViewSet(
     def get_queryset(self):
         """Permite filtrar por project_id"""
         qs = super().get_queryset()
-        
         project_id = self.request.query_params.get("project_id")
-        
         if project_id:
-            qs = qs.filter(project_id=project_id)
-                
+            qs = qs.filter(project=project_id)
         return qs
 
     @transaction.atomic
@@ -96,13 +88,12 @@ class RequestViewSet(
     )
     @decorators.action(
         detail=False, 
-        methods=["get"], 
-        # CAMBIO: Regex de UUID a regex de número
+        methods=["get"],
         url_path='by-project/(?P<project_id>[0-9]+)'
     )
     def by_project(self, request, project_id=None):
         """Recupera pedidos en base a un project_id."""
-        qs = self.get_queryset().filter(project_id=project_id)
+        qs = self.get_queryset().filter(project=project_id)
 
         page = self.paginate_queryset(qs)
         if page is not None:
@@ -112,6 +103,47 @@ class RequestViewSet(
         serializer = self.get_serializer(qs, many=True)
         return response.Response(serializer.data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        tags=["Requests"],
+        operation_id="import_project_requests",
+        description="Importa una lista de pedidos provenientes de Bonita para un proyecto determinado.",
+        request=CreateCollaborationRequestSerializer(many=True),
+        responses={201: CollaborationRequestSerializer(many=True)},
+    )
+    @decorators.action(
+        detail=True,
+        methods=["post"],
+        url_path='needs/import'
+    )
+    @transaction.atomic
+    def import_needs(self, request, pk=None):
+        """
+        Recibe una lista JSON de CollaborationRequest y los crea en lote
+        para el proyecto indicado.
+        """
+        if not isinstance(request.data, list):
+            return response.Response(
+                {"detail": "Se esperaba una lista JSON de pedidos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        enriched = []
+        for item in request.data:
+            item["project"] = pk
+            enriched.append(item)
+
+        serializer = CreateCollaborationRequestSerializer(data=enriched, many=True)
+        serializer.is_valid(raise_exception=True)
+        objs = serializer.save()
+
+        for obj in objs:
+            recompute_request_status(obj)
+            obj.save(update_fields=["status"])
+
+        return response.Response(
+            self.get_serializer(objs, many=True).data,
+            status=status.HTTP_201_CREATED
+        )
 
 @extend_schema(
     tags=["Commitments"],
@@ -193,144 +225,3 @@ class CommitmentViewSet(
                 {"ok": False, "error": "Ocurrió un error interno inesperado al procesar la solicitud."}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-@extend_schema(
-    tags=["Stages"],
-    description="Permite registrar nuevas etapas de proyecto o consultar las existentes.",
-)
-class StageViewSet(
-    mixins.ListModelMixin,
-    mixins.CreateModelMixin,
-    viewsets.GenericViewSet
-):
-    """📋 Endpoints para Etapas del plan de trabajo"""
-    queryset = Stage.objects.select_related("project").all().order_by("created_at")
-    serializer_class = StageSerializer
-    permission_classes = [IsAuthenticated]
-    http_method_names = ["get", "post"]
-
-    def get_queryset(self):
-        """Permite filtrar por project_id"""
-        qs = super().get_queryset()
-        
-        project_id = self.request.query_params.get("project_id")
-        
-        if project_id:
-            qs = qs.filter(project_id=project_id)
-        return qs
-
-    @extend_schema(
-        tags=["Stages"],
-        operation_id="list_stages_by_project",
-        description="Recupera todas las etapas asociadas a un proyecto determinado, usando su ID como parte de la URL.",
-        request=None, 
-        responses={200: StageSerializer(many=True)} 
-    )
-    @decorators.action(
-        detail=False, 
-        methods=["get"], 
-        # CAMBIO: Regex de UUID a regex de número
-        url_path='by-project/(?P<project_id>[0-9]+)'
-    )
-    def by_project(self, request, project_id=None):
-        """Recupera etapas en base a un project_id."""
-        qs = self.get_queryset().filter(project_id=project_id)
-
-        page = self.paginate_queryset(qs)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
-        serializer = self.get_serializer(qs, many=True)
-        return response.Response(serializer.data, status=status.HTTP_200_OK)
-
-
-@extend_schema(
-    tags=["Observations"],
-    description="Permite registrar nuevas observaciones del consejo directivo o consultar las existentes.",
-)
-class ObservationViewSet(
-    mixins.ListModelMixin,
-    mixins.CreateModelMixin,
-    viewsets.GenericViewSet
-):
-    """🔎 Endpoints para Observaciones del Consejo Directivo"""
-    queryset = Observation.objects.select_related("project").all().order_by("-created_at")
-    serializer_class = ObservationSerializer
-    permission_classes = [IsAuthenticated]
-    http_method_names = ["get", "post"]
-
-    def get_queryset(self):
-        """Permite filtrar por project_id"""
-        qs = super().get_queryset()
-        
-        project_id = self.request.query_params.get("project_id")
-        
-        if project_id:
-            qs = qs.filter(project_id=project_id)
-        return qs
-
-    @extend_schema(
-        tags=["Observations"],
-        operation_id="list_observations_by_project",
-        description="Recupera todas las observaciones asociadas a un proyecto determinado, usando su ID como parte de la URL.",
-        request=None, 
-        responses={200: ObservationSerializer(many=True)} 
-    )
-    @decorators.action(
-        detail=False, 
-        methods=["get"], 
-        # CAMBIO: Regex de UUID a regex de número
-        url_path='by-project/(?P<project_id>[0-9]+)'
-    )
-    def by_project(self, request, project_id=None):
-        """Recupera observaciones en base a un project_id."""
-        qs = self.get_queryset().filter(project_id=project_id)
-
-        page = self.paginate_queryset(qs)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
-        serializer = self.get_serializer(qs, many=True)
-        return response.Response(serializer.data, status=status.HTTP_200_OK)
-
-@extend_schema(
-    tags=["Projects"],
-    description="Permite crear, listar y consultar proyectos. Al consultar un proyecto individual (retrieve), se incluye toda su información asociada: pedidos, etapas y observaciones.",
-)
-class ProjectViewSet(
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.CreateModelMixin,
-    viewsets.GenericViewSet
-):
-    """🏗️ Endpoints para Proyectos"""
-    
-    queryset = Project.objects.prefetch_related(
-        'requests', 
-        'stages', 
-        'observations'
-    ).order_by("-created_at")
-    
-    serializer_class = ProjectSerializer
-    permission_classes = [IsAuthenticated]
-    http_method_names = ["get", "post"]
-
-
-@extend_schema(
-    tags=["Users"],
-    description="Permite crear, listar y consultar usuarios del sistema.",
-)
-class UserViewSet(
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.CreateModelMixin,
-    viewsets.GenericViewSet
-):
-    """👤 Endpoints para Usuarios"""
-
-    queryset = User.objects.all().order_by("-created_at")
-    serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated]
-    http_method_names = ["get", "post"]

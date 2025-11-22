@@ -57,12 +57,10 @@ def execute_commitment_service(commit: Commitment) -> None:
         raise CommitmentAlreadyExecutedError()
 
     try:
-        # Bloquear el Pedido asociado
         req = CollaborationRequest.objects.select_for_update().get(pk=commit.request_id)
         
         amt = commit.amount or Decimal("0")
         if amt > 0:
-            # Asegurarse de no dejar valores negativos
             req.reserved_qty = max(Decimal("0"), (req.reserved_qty or Decimal("0")) - amt)
             req.fulfilled_qty = (req.fulfilled_qty or Decimal("0")) + amt
 

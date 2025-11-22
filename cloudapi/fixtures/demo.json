@@ -1,83 +1,70 @@
 [
   {
     "model": "cloudapi.collaborationrequest",
-    "pk": "11111111-1111-1111-1111-111111111111",
+    "pk": 1,
     "fields": {
-      "project_ref": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-      "need_ref": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "project": 34,
       "title": "Cemento",
       "description": "10 bolsas para la obra",
       "request_type": "MAT",
       "target_qty": "10.00",
       "reserved_qty": "0.00",
       "fulfilled_qty": "0.00",
-      "status": "OPEN",
-      "created_at": "2025-01-15T10:00:00Z",
-      "updated_at": "2025-01-15T10:00:00Z"
+      "status": "OPEN"
     }
   },
   {
     "model": "cloudapi.collaborationrequest",
-    "pk": "22222222-2222-2222-2222-222222222222",
+    "pk": 2,
     "fields": {
-      "project_ref": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-      "need_ref": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      "project": 34,
       "title": "Recaudación",
       "description": "Fondos para compra de cemento y arena",
       "request_type": "ECON",
       "target_qty": "150000.00",
       "reserved_qty": "0.00",
       "fulfilled_qty": "0.00",
-      "status": "OPEN",
-      "created_at": "2025-01-15T11:00:00Z",
-      "updated_at": "2025-01-15T11:00:00Z"
+      "status": "OPEN"
     }
   },
   {
     "model": "cloudapi.commitment",
-    "pk": "33333333-3333-3333-3333-333333333333",
+    "pk": 1,
     "fields": {
-      "request": "11111111-1111-1111-1111-111111111111",
+      "request": 1,
       "actor_label": "ONG Vecinos",
       "description": "Aporto 5 bolsas",
       "amount": "5.00",
       "status": "ACTIVE",
-      "commitment_date": "2025-01-15T12:00:00Z",
-      "updated_at": "2025-01-15T12:00:00Z"
+      "ong_name": "ONG Vecinos"
     }
   },
   {
     "model": "cloudapi.collaborationrequest",
-    "pk": "44444444-4444-4444-4444-444444444444",
+    "pk": 3,
     "fields": {
-      "project_ref": "dddddddd-dddd-dddd-dddd-dddddddddddd",
-      "need_ref": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+      "project": 99,
       "title": "Herramientas",
       "description": "Buscamos 3 martillos y 2 escaleras",
       "request_type": "MAT",
       "target_qty": "5.00",
       "reserved_qty": "0.00",
       "fulfilled_qty": "0.00",
-      "status": "OPEN",
-      "created_at": "2025-02-01T09:00:00Z",
-      "updated_at": "2025-02-01T09:00:00Z"
+      "status": "OPEN"
     }
   },
   {
     "model": "cloudapi.collaborationrequest",
-    "pk": "55555555-5555-5555-5555-555555555555",
+    "pk": 4,
     "fields": {
-      "project_ref": "dddddddd-dddd-dddd-dddd-dddddddddddd",
-      "need_ref": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+      "project": 99,
       "title": "Voluntarios para charlas",
       "description": "Buscamos 2 profesionales para brindar talleres educativos",
       "request_type": "MO",
       "target_qty": "2.00",
       "reserved_qty": "0.00",
       "fulfilled_qty": "0.00",
-      "status": "OPEN",
-      "created_at": "2025-02-01T09:30:00Z",
-      "updated_at": "2025-02-01T09:30:00Z"
+      "status": "OPEN"
     }
   }
 ]
