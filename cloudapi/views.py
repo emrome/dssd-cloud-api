@@ -135,10 +135,6 @@ class RequestViewSet(
         serializer.is_valid(raise_exception=True)
         objs = serializer.save()
 
-        for obj in objs:
-            recompute_request_status(obj)
-            obj.save(update_fields=["status"])
-
         return response.Response(
             self.get_serializer(objs, many=True).data,
             status=status.HTTP_201_CREATED
