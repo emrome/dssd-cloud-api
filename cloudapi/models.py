@@ -39,8 +39,6 @@ class CollaborationRequest(models.Model):
         max_digits=12, decimal_places=2, null=True, blank=True,
         validators=[MinValueValidator(0)]
     )
-    reserved_qty = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    fulfilled_qty = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     status = models.CharField(
         max_length=12, choices=RequestStatus.choices,
@@ -53,12 +51,8 @@ class CollaborationRequest(models.Model):
         db_table = 'collaboration_request'
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["project"]), # Índice en el FK
+            models.Index(fields=["project"]),
             models.Index(fields=["status"]),
-        ]
-        constraints = [
-            models.CheckConstraint(check=Q(reserved_qty__gte=0), name="req_reserved_nonneg"),
-            models.CheckConstraint(check=Q(fulfilled_qty__gte=0), name="req_fulfilled_nonneg"),
         ]
 
     def __str__(self):

@@ -12,8 +12,7 @@ from .serializers import (
 )
 
 from .services import (
-    recompute_request_status, 
-    update_request_on_new_commitment, 
+    update_request_on_new_commitment,
     execute_commitment_service
 )
 from .exceptions import BusinessLogicError, RelatedRequestNotFoundError
@@ -150,13 +149,11 @@ class RequestViewSet(
     description="Permite registrar compromisos de colaboración sobre pedidos existentes o ver la información de compromisos ya realizados.",
     examples=[
         OpenApiExample(
-            "Crear compromiso parcial",
+            "Crear compromiso",
             value={
-                # CAMBIO: De UUID a un ID numérico
                 "request": 1,
                 "actor_label": "ONG Vecinos",
-                "amount": "5",
-                "description": "Aporto 5 bolsas"
+                "description": "Aporto las bolsas"
             },
             request_only=True,
         ),
@@ -167,7 +164,7 @@ class CommitmentViewSet(
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet
 ):
-    """🤝 Endpoints para compromisos (alta, ejecución y consulta de estado)"""
+    """ Endpoints para compromisos (alta, ejecución y consulta de estado)"""
     queryset = Commitment.objects.select_related("request").all().order_by("-commitment_date")
     serializer_class = CommitmentSerializer
     permission_classes = [IsAuthenticated]
@@ -176,10 +173,9 @@ class CommitmentViewSet(
     @transaction.atomic
     def perform_create(self, serializer):
         """
-        Crea un compromiso en estado ACTIVE y llama al servicio
-        para actualizar los totales del pedido.
+        Crea un compromiso y deja el pedido como COMPLETED.
         """
-        commit = serializer.save(status=CommitmentStatus.ACTIVE)
+        commit = serializer.save(status=CommitmentStatus.FULFILLED)
         update_request_on_new_commitment(commit)
         serializer.instance = commit
 
