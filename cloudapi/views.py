@@ -75,8 +75,7 @@ class RequestViewSet(
         automáticamente su estado.
         """
         obj = serializer.save()
-        recompute_request_status(obj) 
-        obj.save(update_fields=["status"])
+        return obj
 
     @extend_schema(
         tags=["Requests"],
