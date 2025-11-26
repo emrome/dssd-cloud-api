@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 
 from .models import (
-    CollaborationRequest, Commitment, CommitmentStatus
+    CollaborationRequest, Commitment, CommitmentStatus, RequestStatus
 )
 from .serializers import (
     CollaborationRequestSerializer, CommitmentSerializer, CreateCollaborationRequestSerializer
@@ -177,11 +177,141 @@ class CommitmentViewSet(
     @transaction.atomic
     def perform_create(self, serializer):
         """
-        Crea un compromiso y deja el pedido como COMPLETED.
+        Crea un compromiso (status=ACTIVE) y marca el pedido como RESERVED.
         """
-        commit = serializer.save(status=CommitmentStatus.FULFILLED)
+        commit = serializer.save(status=CommitmentStatus.ACTIVE)
         update_request_on_new_commitment(commit)
         serializer.instance = commit
+
+
+    @extend_schema(
+        tags=["Commitments"],
+        operation_id="accept_commitment",
+        summary="Aceptar un compromiso de colaboración",
+        description=(
+                "Marca el pedido asociado como COMPLETED cuando la ONG solicitante "
+                "acepta el compromiso. El compromiso permanece en estado ACTIVE hasta "
+                "que se ejecute (end-point execute)."
+        ),
+        request=None,
+        responses={
+            200: OpenApiExample(
+                "Aceptación OK",
+                value={"ok": True},
+                response_only=True
+            ),
+            400: OpenApiExample(
+                "Estado inválido",
+                value={"ok": False, "error": "Solo se pueden aceptar compromisos activos."},
+                response_only=True
+            ),
+            404: OpenApiExample(
+                "No encontrado",
+                value={"ok": False, "error": "No se encontró el compromiso."},
+                response_only=True
+            ),
+        }
+    )
+    @decorators.action(detail=True, methods=["post"])
+    @transaction.atomic
+    def accept(self, request, pk=None):
+        """
+        Acepta un compromiso:
+        - El compromiso debe estar ACTIVE.
+        - El pedido asociado pasa a COMPLETED.
+        """
+        try:
+            commit = self.get_object()
+        except Http404:
+            return response.Response(
+                {"ok": False, "error": "No se encontró el compromiso."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if commit.status != CommitmentStatus.ACTIVE:
+            return response.Response(
+                {"ok": False, "error": "Solo se pueden aceptar compromisos activos."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        req = commit.request
+        if not req:
+            return response.Response(
+                {"ok": False, "error": "El compromiso no tiene un pedido asociado."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        req.status = RequestStatus.COMPLETED
+        req.save()
+
+        return response.Response({"ok": True}, status=status.HTTP_200_OK)
+
+
+    @extend_schema(
+        tags=["Commitments"],
+        operation_id="reject_commitment",
+        summary="Rechazar un compromiso de colaboración",
+        description=(
+                "Rechaza un compromiso activo, marcándolo como CANCELLED y devolviendo "
+                "el pedido asociado a estado OPEN para que pueda recibir nuevas ofertas."
+        ),
+        request=None,
+        responses={
+            200: OpenApiExample(
+                "Rechazo OK",
+                value={"ok": True},
+                response_only=True
+            ),
+            400: OpenApiExample(
+                "Estado inválido",
+                value={"ok": False, "error": "Solo se pueden rechazar compromisos activos."},
+                response_only=True
+            ),
+            404: OpenApiExample(
+                "No encontrado",
+                value={"ok": False, "error": "No se encontró el compromiso."},
+                response_only=True
+            ),
+        }
+    )
+    @decorators.action(detail=True, methods=["post"])
+    @transaction.atomic
+    def reject(self, request, pk=None):
+        """
+        Rechaza un compromiso:
+        - El compromiso debe estar ACTIVE.
+        - El compromiso pasa a CANCELLED.
+        - El pedido asociado vuelve a OPEN.
+        """
+        try:
+            commit = self.get_object()
+        except Http404:
+            return response.Response(
+                {"ok": False, "error": "No se encontró el compromiso."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if commit.status != CommitmentStatus.ACTIVE:
+            return response.Response(
+                {"ok": False, "error": "Solo se pueden rechazar compromisos activos."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        req = commit.request
+        if not req:
+            return response.Response(
+                {"ok": False, "error": "El compromiso no tiene un pedido asociado."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Compromiso cancelado y pedido vuelve a estar disponible
+        commit.status = CommitmentStatus.CANCELLED
+        commit.save()
+
+        req.status = RequestStatus.OPEN
+        req.save()
+
+        return response.Response({"ok": True}, status=status.HTTP_200_OK)
 
 
     @extend_schema(
