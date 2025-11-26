@@ -80,9 +80,12 @@ class RequestViewSet(
     @extend_schema(
         tags=["Requests"],
         operation_id="list_requests_by_project",
-        description="Recupera todos los pedidos de colaboración asociados a un proyecto determinado, usando su ID como parte de la URL.",
-        request=None, 
-        responses={200: CollaborationRequestSerializer(many=True)} 
+        description=(
+                "Recupera los pedidos de colaboración de un proyecto. "
+                "Opcionalmente se puede filtrar por estado usando ?status=OPEN|RESERVED|COMPLETED|ALL"
+        ),
+        request=None,
+        responses={200: CollaborationRequestSerializer(many=True)}
     )
     @decorators.action(
         detail=False, 
@@ -90,8 +93,13 @@ class RequestViewSet(
         url_path='by-project/(?P<project_id>[0-9]+)'
     )
     def by_project(self, request, project_id=None):
-        """Recupera pedidos en base a un project_id."""
+        """Recupera pedidos en base a un project_id, con filtro opcional por estado."""
         qs = self.get_queryset().filter(project=project_id)
+
+        status_param = request.query_params.get("status")
+
+        if status_param and status_param != "ALL":
+            qs = qs.filter(status=status_param)
 
         page = self.paginate_queryset(qs)
         if page is not None:
@@ -100,6 +108,7 @@ class RequestViewSet(
 
         serializer = self.get_serializer(qs, many=True)
         return response.Response(serializer.data, status=status.HTTP_200_OK)
+
 
     @extend_schema(
         tags=["Requests"],
