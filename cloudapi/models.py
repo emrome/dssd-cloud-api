@@ -70,10 +70,6 @@ class Commitment(models.Model):
     actor_label = models.CharField(max_length=140, blank=True, null=True, db_index=True)
 
     description = models.TextField(blank=True)
-    amount = models.DecimalField(
-        max_digits=12, decimal_places=2, null=True, blank=True,
-        validators=[MinValueValidator(0)]
-    )
     status = models.CharField(
         max_length=12, choices=CommitmentStatus.choices,
         default=CommitmentStatus.ACTIVE, db_index=True

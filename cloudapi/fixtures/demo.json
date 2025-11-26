@@ -32,7 +32,7 @@
     "pk": 1,
     "fields": {
       "request": 1,
-      "actor_label": "ONG Vecinos",
+      "actor_label": "Juan Pérez",
       "description": "Aporto las bolsas",
       "status": "ACTIVE",
       "commitment_date": "2025-01-15T12:00:00Z",
