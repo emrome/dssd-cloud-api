@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.http import Http404 
+from django.http import Http404
 from rest_framework import viewsets, mixins, decorators, response, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
@@ -26,8 +26,7 @@ from drf_spectacular.utils import extend_schema, OpenApiExample
         OpenApiExample(
             "Crear pedido (Materiales)",
             value={
-                # CAMBIO: De UUID a un ID numérico
-                "project": 1, 
+                "project": 1,
                 "title": "Cemento",
                 "description": "10 bolsas para la obra",
                 "request_type": "MAT",
@@ -38,7 +37,6 @@ from drf_spectacular.utils import extend_schema, OpenApiExample
         OpenApiExample(
             "Crear pedido (Económica)",
             value={
-                # CAMBIO: De UUID a un ID numérico
                 "project": 1,
                 "title": "Recaudación para materiales",
                 "description": "Fondos para compra de cemento y arena",
@@ -71,24 +69,24 @@ class RequestViewSet(
     @transaction.atomic
     def perform_create(self, serializer):
         """
-        Guarda el pedido y llama al servicio para actualizar 
-        automáticamente su estado.
+        Guarda el pedido.
+        (La lógica de estado se maneja después vía compromisos.)
         """
-        obj = serializer.save()
-        return obj
+        return serializer.save()
 
     @extend_schema(
         tags=["Requests"],
         operation_id="list_requests_by_project",
         description=(
                 "Recupera los pedidos de colaboración de un proyecto. "
-                "Opcionalmente se puede filtrar por estado usando ?status=OPEN|RESERVED|COMPLETED|ALL"
+                "Opcionalmente se puede filtrar por estado usando "
+                "?status=OPEN|RESERVED|COMPLETED|ALL"
         ),
         request=None,
         responses={200: CollaborationRequestSerializer(many=True)}
     )
     @decorators.action(
-        detail=False, 
+        detail=False,
         methods=["get"],
         url_path='by-project/(?P<project_id>[0-9]+)'
     )
@@ -97,7 +95,6 @@ class RequestViewSet(
         qs = self.get_queryset().filter(project=project_id)
 
         status_param = request.query_params.get("status")
-
         if status_param and status_param != "ALL":
             qs = qs.filter(status=status_param)
 
@@ -108,7 +105,6 @@ class RequestViewSet(
 
         serializer = self.get_serializer(qs, many=True)
         return response.Response(serializer.data, status=status.HTTP_200_OK)
-
 
     @extend_schema(
         tags=["Requests"],
@@ -148,6 +144,7 @@ class RequestViewSet(
             status=status.HTTP_201_CREATED
         )
 
+
 @extend_schema(
     tags=["Commitments"],
     description="Permite registrar compromisos de colaboración sobre pedidos existentes o ver la información de compromisos ya realizados.",
@@ -168,7 +165,7 @@ class CommitmentViewSet(
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet
 ):
-    """ Endpoints para compromisos (alta, ejecución y consulta de estado)"""
+    """Endpoints para compromisos (alta, aceptación/rechazo y ejecución)"""
     queryset = Commitment.objects.select_related("request").all().order_by("-commitment_date")
     serializer_class = CommitmentSerializer
     permission_classes = [IsAuthenticated]
@@ -183,15 +180,13 @@ class CommitmentViewSet(
         update_request_on_new_commitment(commit)
         serializer.instance = commit
 
-
     @extend_schema(
         tags=["Commitments"],
         operation_id="accept_commitment",
         summary="Aceptar un compromiso de colaboración",
         description=(
                 "Marca el pedido asociado como COMPLETED cuando la ONG solicitante "
-                "acepta el compromiso. El compromiso permanece en estado ACTIVE hasta "
-                "que se ejecute (end-point execute)."
+                "acepta el compromiso. El compromiso permanece ACTIVE hasta que se ejecute."
         ),
         request=None,
         responses={
@@ -242,10 +237,9 @@ class CommitmentViewSet(
             )
 
         req.status = RequestStatus.COMPLETED
-        req.save()
+        req.save(update_fields=["status"])
 
         return response.Response({"ok": True}, status=status.HTTP_200_OK)
-
 
     @extend_schema(
         tags=["Commitments"],
@@ -304,32 +298,41 @@ class CommitmentViewSet(
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Compromiso cancelado y pedido vuelve a estar disponible
         commit.status = CommitmentStatus.CANCELLED
-        commit.save()
+        commit.save(update_fields=["status"])
 
         req.status = RequestStatus.OPEN
-        req.save()
+        req.save(update_fields=["status"])
 
         return response.Response({"ok": True}, status=status.HTTP_200_OK)
-
 
     @extend_schema(
         tags=["Commitments"],
         operation_id="execute_commitment",
-        summary="Marcar un compromiso como completado",
-        description="Completa un compromiso, moviendo su monto de reservado a cumplido y recalculando el estado del pedido asociado.",
+        summary="Cumplir un compromiso de colaboración",
+        description=(
+                "Marca el compromiso como FULFILLED, verificando reglas de negocio "
+                "(por ejemplo, que el pedido esté COMPLETED)."
+        ),
         request=None,
         responses={
             200: OpenApiExample("Ejecución OK", value={"ok": True}, response_only=True),
-            400: OpenApiExample("Error de negocio", value={"ok": False, "error": "Este compromiso ya fue ejecutado previamente."}, response_only=True),
-            404: OpenApiExample("No encontrado", value={"ok": False, "error": "No se encontró el compromiso."}, response_only=True),
+            400: OpenApiExample(
+                "Error de negocio",
+                value={"ok": False, "error": "Este compromiso ya fue ejecutado previamente."},
+                response_only=True
+            ),
+            404: OpenApiExample(
+                "No encontrado",
+                value={"ok": False, "error": "No se encontró el compromiso."},
+                response_only=True
+            ),
         }
     )
     @decorators.action(detail=True, methods=["post"])
     def execute(self, request, pk=None):
         """
-        Ejecuta (cumple) un compromiso, con manejo de excepciones.
+        Ejecuta (cumple) un compromiso, con manejo de excepciones de negocio.
         """
         try:
             commit = self.get_object() 
@@ -350,7 +353,7 @@ class CommitmentViewSet(
                 {"ok": False, "error": "Datos inválidos.", "details": e.detail}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-        except Exception as e:
+        except Exception:
             return response.Response(
                 {"ok": False, "error": "Ocurrió un error interno inesperado al procesar la solicitud."}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
